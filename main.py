@@ -2,8 +2,11 @@ import json
 import random
 import os
 
-# 자원 목록 정의 (상자류 포함)
-item_mineral = ["돌", "주석", "철", "은", "금", "티타늄", "에메랄드", "루비", "사파이어", "다이아몬드", "방사능", "토륨", "라듐", "방사능상자"]
+# 자원 목록 정의
+item_mineral = ["돌", "주석", "철", "은", "금", "티타늄", "에메랄드", "루비", "사파이어", "다이아몬드", "방사능", "토륨", "라듐"]
+
+# 상자 목록 정의
+item_boxes = ["방사능상자"]
 
 # 확률 정의 (자원 개수와 맞춰야 함)
 item_prob = [3700, 1700, 1300, 1000, 800, 500, 400, 100, 200, 50, 250]
@@ -72,7 +75,7 @@ def mine_mineral():
         data = json.load(f)
     
     # 채굴 실행
-    mined = random.choices(item_mineral[:10], weights=item_prob[:10], k=1)[0]
+    mined = random.choices(item_mineral, weights=item_prob, k=1)[0]
     data[mined] += 1
     print(f"{mined} 1개를 채굴했습니다!")
     
