@@ -2,6 +2,7 @@ import json
 import random
 import os
 import time
+import sys
 
 # 자원 목록 정의
 item_mineral = ["돌", "주석", "철", "은", "금", "티타늄", "에메랄드", "루비", "사파이어", "다이아몬드", "방사능", "토륨", "라듐"]
@@ -16,16 +17,54 @@ if len(item_mineral) != len(item_prob):
 
 # 제작 레시피 정의
 recipes = {
-    ''' 양식 : "아이템이름": {"재료1": 개수1, "재료2": 개수2, ...} '''
-    "방사능상자": {"방사능": 3}
-}
-
-# 곡괭이도 제작할 수 있게 기본 레시피 추가
-recipes.update({
+    # 양식 : "아이템이름": {"재료1": 개수1, "재료2": 개수2, ...}
+    "방사능상자": {"방사능": 3},
+    # 곡괭이 제작 레시피
     "깨진곡괭이": {"돌": 2},
     "철곡괭이": {"철": 5, "주석": 2},
-    "강화곡괭이": {"금": 2, "티타늄": 2}
-})
+    "금곡괭이": {"금": 2, "티타늄": 2}
+}
+
+# 자동 동기화: 레시피에 새 아이템을 추가하면 해당 아이템을
+# 채굴/인벤토리 목록에 자동으로 등록하고 확률 리스트(item_prob)를
+# 맞춰줍니다. (간단한 기본 가중치 1을 추가)
+def sync_recipes_into_items():
+    """
+    recipes의 키들을 검사하여 item_mineral, item_boxes, item_prob에
+    자동으로 등록합니다.
+    - 새 아이템은 item_mineral에 추가됩니다.
+    - 이름이 '상자'로 끝나면 item_boxes에도 추가됩니다.
+    - item_prob 길이가 item_mineral과 달라지면 기본 가중치 1을 추가합니다.
+    """
+    # 추가될 항목을 모아 한 번에 처리
+    added = False
+    for recipe_item in list(recipes.keys()):
+        if recipe_item not in item_mineral:
+            item_mineral.append(recipe_item)
+            # 기본 가중치 추가
+            item_prob.append(1)
+            added = True
+        # 이름에 '상자'가 포함되면 상자 목록에도 추가 (중복 방지)
+        if recipe_item not in item_boxes and recipe_item.endswith('상자'):
+            item_boxes.append(recipe_item)
+            added = True
+
+    # 안전 점검: 길이 불일치 시 item_prob을 item_mineral 길이에 맞춤
+    if len(item_prob) != len(item_mineral):
+        # 확률 리스트가 짧으면 1로 채우고, 길면 잘라냄
+        if len(item_prob) < len(item_mineral):
+            item_prob.extend([1] * (len(item_mineral) - len(item_prob)))
+        else:
+            del item_prob[len(item_mineral):]
+        added = True
+
+    if added:
+        # 간단한 로그 출력 (개발 중 도움용)
+        # 실제 배포에서는 print를 제거하거나 로거로 대체하세요.
+        print("recipes 항목을 item_mineral/item_boxes/item_prob에 동기화했습니다.")
+
+# recipes로 추가된 아이템을 위 목록에 반영
+sync_recipes_into_items()
 
 # 곡괭이(도구) 정의: 이름 -> 속성
 # cooldown: 채굴 쿨타임(초), drops: 한 번 채굴 시 드롭 개수
@@ -33,15 +72,15 @@ pickaxes = {
     # 기본 쿨타임은 120초 (깨진곡괭이 기준). 다른 곡괭이는 더 나은 기본값을 가질 수 있음.
     "깨진곡괭이": {"cooldown": 120.0, "drops": 1},
     "철곡괭이": {"cooldown": 90.0, "drops": 10},
-    "강화곡괭이": {"cooldown": 60.0, "drops": 2}
+    "금곡괭이": {"cooldown": 60.0, "drops": 2}
 }
 
 # 상점 아이템 목록: (이름, 구매가)
 shop_items = [
     ("깨진곡괭이", 500),
     ("철곡괭이", 50000),
-    ("강화곡괭이", 100000),
-    ("강화권", 100000)  # 구매 시 장착한 곡괭이의 +1강 적용
+    ("금곡괭이", 100000),
+    ("강화권", 1000000)  # 구매 시 장착한 곡괭이의 +1강 적용
 ]
 
 # (업그레이드 시스템 제거)
@@ -505,7 +544,12 @@ def buy_from_shop(index):
     except Exception:
         print("구매 중 오류가 발생했습니다.")
 
-cmd = input('명령을 입력하세요: ')
+# 명령을 커맨드라인 인수로 받을 수 있게 변경 (자동화/테스트용).
+# 예: python main.py ㅇ제작 방사능상자 1
+if len(sys.argv) > 1:
+    cmd = ' '.join(sys.argv[1:])
+else:
+    cmd = input('명령을 입력하세요: ')
 
 #----------------------------명령어 처리--------------------------------------------------
 
@@ -515,23 +559,25 @@ elif cmd == "ㅇ채굴":
     mine_mineral()
 elif cmd.startswith("ㅇ제작 "):
     parts = cmd.split()
-    if len(parts) != 3:
+    # 아이템 이름에 공백이 포함될 수 있으므로 마지막 토큰을 개수로 취급
+    if len(parts) < 3:
         print("올바른 형식: ㅇ제작 {아이템이름} {개수}")
     else:
         try:
-            item_name = parts[1]
-            amount = int(parts[2])
+            amount = int(parts[-1])
+            item_name = ' '.join(parts[1:-1])
             craft_item(item_name, amount)
         except ValueError:
             print("개수는 숫자여야 합니다.")
 elif cmd.startswith("ㅇ상자열기 "):
     parts = cmd.split()
-    if len(parts) != 3:
+    # 상자 이름에 공백이 있을 수 있으므로 마지막 토큰을 개수로 처리
+    if len(parts) < 3:
         print("올바른 형식: ㅇ상자열기 {상자이름} {개수}")
     else:
         try:
-            box_name = parts[1]
-            amount = int(parts[2])
+            amount = int(parts[-1])
+            box_name = ' '.join(parts[1:-1])
             open_box(box_name, amount)
         except ValueError:
             print("개수는 숫자여야 합니다.")
